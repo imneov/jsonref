@@ -47,7 +47,7 @@ class JsonRef(LazyProxy):
 
     @classmethod
     def replace_refs(
-            cls, obj, base_uri="", loader=None, jsonschema=False, load_on_repr=True
+            cls, obj, base_uri="", loader=None, jsonschema=False, ref_to_root=False, load_on_repr=True
     ):
         """
         .. deprecated:: 0.4
@@ -77,6 +77,7 @@ class JsonRef(LazyProxy):
             base_uri=base_uri,
             loader=loader,
             jsonschema=jsonschema,
+            ref_to_root=ref_to_root,
             load_on_repr=load_on_repr,
         )
 
@@ -87,11 +88,14 @@ class JsonRef(LazyProxy):
             base_uri="",
             loader=None,
             jsonschema=False,
+            ref_to_root=False,
             load_on_repr=True,
             merge_props=False,
             _path=(),
             _store=None,
     ):
+        if not ref_to_root:
+            print("####")
         if not isinstance(refobj.get("$ref"), str):
             raise ValueError("Not a valid json reference object: %s" % refobj)
         self.__reference__ = refobj
@@ -99,6 +103,7 @@ class JsonRef(LazyProxy):
         self.base_uri = base_uri
         self.loader = loader or jsonloader
         self.jsonschema = jsonschema
+        self.ref_to_root = ref_to_root
         self.load_on_repr = load_on_repr
         self.merge_props = merge_props
         self.path = _path
@@ -112,6 +117,7 @@ class JsonRef(LazyProxy):
             base_uri=self.base_uri,
             loader=self.loader,
             jsonschema=self.jsonschema,
+            ref_to_root=self.ref_to_root,
             load_on_repr=self.load_on_repr,
             merge_props=self.merge_props,
             path=self.path,
@@ -135,13 +141,15 @@ class JsonRef(LazyProxy):
                     "%s: %s" % (e.__class__.__name__, str(e)), cause=e
                 ) from e
             base_doc = _replace_refs(
-                base_doc, **{**self._ref_kwargs, "root_uri": self.root_uri,"base_uri": uri, "recursing": False}
+                base_doc,
+                **{**self._ref_kwargs, "ref_to_root": self.ref_to_root, "root_uri": self.root_uri, "base_uri": uri,
+                   "recursing": False}
             )
         else:
             base_doc = self.store[uri]
 
         result, ok = self.resolve_pointer(base_doc, fragment)
-        if not ok:
+        if not ok and self.ref_to_root:
             base_doc = self.store[self.root_uri]
             result, ok = self.resolve_pointer(base_doc, fragment)
             if not ok:
@@ -296,6 +304,7 @@ def replace_refs(
     base_uri="",
     loader=jsonloader,
     jsonschema=False,
+    ref_to_root=False,
     load_on_repr=True,
     merge_props=False,
     proxies=True,
@@ -338,6 +347,7 @@ def replace_refs(
         base_uri=base_uri,
         loader=loader,
         jsonschema=jsonschema,
+        ref_to_root=ref_to_root,
         load_on_repr=load_on_repr,
         merge_props=merge_props,
         store=URIDict(),
@@ -358,6 +368,7 @@ def _replace_refs(
         base_uri,
         loader,
         jsonschema,
+        ref_to_root,
         load_on_repr,
         merge_props,
         store,
@@ -384,6 +395,7 @@ def _replace_refs(
                 base_uri=base_uri,
                 loader=loader,
                 jsonschema=jsonschema,
+                ref_to_root=ref_to_root,
                 load_on_repr=load_on_repr,
                 merge_props=merge_props,
                 store=store,
@@ -400,6 +412,7 @@ def _replace_refs(
                 base_uri=base_uri,
                 loader=loader,
                 jsonschema=jsonschema,
+                ref_to_root=ref_to_root,
                 load_on_repr=load_on_repr,
                 merge_props=merge_props,
                 store=store,
@@ -419,6 +432,7 @@ def _replace_refs(
             base_uri=base_uri,
             loader=loader,
             jsonschema=jsonschema,
+            ref_to_root=ref_to_root,
             load_on_repr=load_on_repr,
             merge_props=merge_props,
             _path=path,
@@ -437,6 +451,7 @@ def load(
     base_uri="",
     loader=None,
     jsonschema=False,
+    ref_to_root=False,
     load_on_repr=True,
     merge_props=False,
     proxies=True,
@@ -462,6 +477,7 @@ def load(
         base_uri=base_uri,
         loader=loader,
         jsonschema=jsonschema,
+        ref_to_root=ref_to_root,
         load_on_repr=load_on_repr,
         merge_props=merge_props,
         proxies=proxies,
@@ -474,6 +490,7 @@ def loads(
     base_uri="",
     loader=None,
     jsonschema=False,
+    ref_to_root=False,
     load_on_repr=True,
     merge_props=False,
     proxies=True,
@@ -499,6 +516,7 @@ def loads(
         base_uri=base_uri,
         loader=loader,
         jsonschema=jsonschema,
+        ref_to_root=ref_to_root,
         load_on_repr=load_on_repr,
         merge_props=merge_props,
         proxies=proxies,
@@ -511,6 +529,7 @@ def load_uri(
     base_uri=None,
     loader=None,
     jsonschema=False,
+    ref_to_root=False,
     load_on_repr=True,
     merge_props=False,
     proxies=True,
@@ -536,6 +555,7 @@ def load_uri(
         base_uri=base_uri,
         loader=loader,
         jsonschema=jsonschema,
+        ref_to_root=ref_to_root,
         load_on_repr=load_on_repr,
         merge_props=merge_props,
         proxies=proxies,

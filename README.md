@@ -57,3 +57,75 @@ True
 >>> pprint(data)
 {'real': [2, 3, 4, 5], 'ref': [2, 3, 4, 5]}
 ```
+
+
+
+## $Ref in Root
+Solve the problem that the `$ref` path is the root file when there are multiple files.
+
+```shell
+❯ cat a.json
+{ 
+  "paths": {
+    "$ref": "c.json#xyz"
+  },
+  "definitions": {
+    "project": {
+      "$ref": "./b.json#/abc"
+    },
+    "user": {
+      "$ref": "./b.json#/def"
+    }
+  }
+}                                                                                                                       
+❯ cat b.json
+{ 
+  "abc": {
+    "vvv": 1234
+  },
+  "def": {
+    "items": {
+      "$ref": "#/definitions/project"
+    }
+  }
+}                                                                                                                                    
+❯ cat c.json
+{
+  "xyz": {
+    "project": {
+      "$ref": "#definitions/project/v"
+    }
+  }
+}
+```
+
+If `$ref` in `c.json` is link to `a.json`, use `ref_to_root=True` to fix error.
+```shell
+>>> file_a_path = Path("a.json").absolute()
+>>> f = open("a.json")
+>>> jsonref.load(f, base_uri=file_a_path.as_uri(), ref_to_root=True)
+{'paths': {'project': {'$ref': '#definitions/project/v'}}, 'definitions': {'project': {'vvv': 1234}, 'user': {'items': {'$ref': '#/definitions/project'}}}}
+>>> jsonref.load(f, base_uri=file_a_path.as_uri(), ref_to_root=False)
+Traceback (most recent call last):
+  File "<stdin>", line 1, in <module>
+  File "/Users/neov/anaconda3/envs/IaaS-NG/lib/python3.9/site-packages/jsonref.py", line 476, in load
+    json.load(fp, **kwargs),
+  File "/Users/neov/anaconda3/envs/IaaS-NG/lib/python3.9/json/__init__.py", line 293, in load
+    return loads(fp.read(),
+  File "/Users/neov/anaconda3/envs/IaaS-NG/lib/python3.9/json/__init__.py", line 346, in loads
+    return _default_decoder.decode(s)
+  File "/Users/neov/anaconda3/envs/IaaS-NG/lib/python3.9/json/decoder.py", line 337, in decode
+    obj, end = self.raw_decode(s, idx=_w(s, 0).end())
+  File "/Users/neov/anaconda3/envs/IaaS-NG/lib/python3.9/json/decoder.py", line 355, in raw_decode
+    raise JSONDecodeError("Expecting value", s, err.value) from None
+json.decoder.JSONDecodeError: Expecting value: line 1 column 1 (char 0)
+```
+
+
+
+
+
+
+
+
+

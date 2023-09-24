@@ -17,7 +17,7 @@ except ImportError:
 
 from proxytypes import LazyProxy
 
-__version__ = "1.1.0"
+__version__ = "1.1.1"
 
 
 class JsonRefError(Exception):
@@ -47,7 +47,7 @@ class JsonRef(LazyProxy):
 
     @classmethod
     def replace_refs(
-        cls, obj, base_uri="", loader=None, jsonschema=False, load_on_repr=True
+            cls, obj, base_uri="", loader=None, jsonschema=False, load_on_repr=True
     ):
         """
         .. deprecated:: 0.4
@@ -81,19 +81,21 @@ class JsonRef(LazyProxy):
         )
 
     def __init__(
-        self,
-        refobj,
-        base_uri="",
-        loader=None,
-        jsonschema=False,
-        load_on_repr=True,
-        merge_props=False,
-        _path=(),
-        _store=None,
+            self,
+            refobj,
+            root_uri="",
+            base_uri="",
+            loader=None,
+            jsonschema=False,
+            load_on_repr=True,
+            merge_props=False,
+            _path=(),
+            _store=None,
     ):
         if not isinstance(refobj.get("$ref"), str):
             raise ValueError("Not a valid json reference object: %s" % refobj)
         self.__reference__ = refobj
+        self.root_uri = root_uri
         self.base_uri = base_uri
         self.loader = loader or jsonloader
         self.jsonschema = jsonschema
@@ -133,11 +135,17 @@ class JsonRef(LazyProxy):
                     "%s: %s" % (e.__class__.__name__, str(e)), cause=e
                 ) from e
             base_doc = _replace_refs(
-                base_doc, **{**self._ref_kwargs, "base_uri": uri, "recursing": False}
+                base_doc, **{**self._ref_kwargs, "root_uri": self.root_uri,"base_uri": uri, "recursing": False}
             )
         else:
             base_doc = self.store[uri]
-        result = self.resolve_pointer(base_doc, fragment)
+
+        result, ok = self.resolve_pointer(base_doc, fragment)
+        if not ok:
+            base_doc = self.store[self.root_uri]
+            result, ok = self.resolve_pointer(base_doc, fragment)
+            if not ok:
+                raise self._error("Resolve_pointer error.")
         if result is self:
             raise self._error("Reference refers directly to itself.")
         if hasattr(result, "__subject__"):
@@ -176,12 +184,14 @@ class JsonRef(LazyProxy):
             if document is self:
                 document = self.__reference__
             try:
+                if part not in document:
+                    return "", False
                 document = document[part]
             except (TypeError, LookupError) as e:
                 raise self._error(
                     "Unresolvable JSON pointer: %r" % pointer, cause=e
                 ) from e
-        return document
+        return document, True
 
     def _error(self, message, cause=None):
         message = "Error while resolving `{}`: {}".format(self.full_uri, message)
@@ -324,6 +334,7 @@ def replace_refs(
     """
     result = _replace_refs(
         obj,
+        root_uri=base_uri,
         base_uri=base_uri,
         loader=loader,
         jsonschema=jsonschema,
@@ -341,16 +352,17 @@ def replace_refs(
 
 
 def _replace_refs(
-    obj,
-    *,
-    base_uri,
-    loader,
-    jsonschema,
-    load_on_repr,
-    merge_props,
-    store,
-    path,
-    recursing
+        obj,
+        *,
+        root_uri,
+        base_uri,
+        loader,
+        jsonschema,
+        load_on_repr,
+        merge_props,
+        store,
+        path,
+        recursing
 ):
     base_uri, frag = urlparse.urldefrag(base_uri)
     store_uri = None  # If this does not get set, we won't store the result
@@ -368,6 +380,7 @@ def _replace_refs(
         obj = {
             k: _replace_refs(
                 v,
+                root_uri=root_uri,
                 base_uri=base_uri,
                 loader=loader,
                 jsonschema=jsonschema,
@@ -383,6 +396,7 @@ def _replace_refs(
         obj = [
             _replace_refs(
                 v,
+                root_uri=root_uri,
                 base_uri=base_uri,
                 loader=loader,
                 jsonschema=jsonschema,
@@ -397,8 +411,11 @@ def _replace_refs(
 
     # If this object itself was a reference, replace it with a JsonRef
     if isinstance(obj, Mapping) and isinstance(obj.get("$ref"), str):
+        if str(obj.get("$ref")).startswith("#"):
+            return obj
         obj = JsonRef(
             obj,
+            root_uri=root_uri,
             base_uri=base_uri,
             loader=loader,
             jsonschema=jsonschema,
